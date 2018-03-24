@@ -8,10 +8,16 @@
 # Library
 import json
 import pprint
+import nltk
+from nltk.tokenize import sent_tokenize, RegexpTokenizer
+import numpy as np
+import operator
+
+
 
 # global variables listed here
 QA_TYPE_MATCH = {}  # a dictionary maps question type to answer type
-
+tokenizer = RegexpTokenizer(r'\w+')
 
 # -------------
 # Read in data
@@ -28,27 +34,100 @@ def read_data(filename):
 #  Contextualize paragrapgh
 # -------------
 
-def make_ngrams(paragraph, ngram=1):
+def make_ngrams(paragraph, ngrams=[1]):
     '''
       Input: s string represents paragraph or question, ngram = 1 will make unigram, otherwise make bigram.
       Output:  list of tokens.(if not unigram, element would be tuples)
     '''
 
+    sent_tokenize_list = sent_tokenize(paragraph)
+    print(len(sent_tokenize_list))
+    token_p={}
 
-    pass
+
+    for ngram in ngrams:
+        if ngram ==1:
+            token_p['1']=[]
+            for sent in sent_tokenize_list:
+
+                token_sent =tokenizer.tokenize(sent)
+
+                token_p['1'].append(token_sent)
+        elif ngram==2:
+            token_p['2'] = []
+            for sent in sent_tokenize_list:
+                token_sent = tokenizer.tokenize(sent)
+                bi_token_sent =list(nltk.bigrams(token_sent))
+
+                token_p['2'].append(bi_token_sent)
+
+        else:
+            token_p[str(ngram)]=[]
+            # haven't test
+            for sent in sent_tokenize_list:
+                token_s = tokenizer.tokenize(sent)
+
+
+                new_ngram = []
+                i = 0
+                for i in range(len(token_s)-ngram):
+                    new_ngram.append(list(token_s[j] for j in range(i,i+ngram)))
+                token_p[str(ngram)].append(new_ngram)
+
+    return token_p
+
 
 
 # -------------
 #  Compute similarity
+#  main function: make_score
+#  subfunction: uni_score, bi_score
 # -------------
+
+#subfunction of make_score
+def uni_score(token_paragraph_uni,token_question_uni):
+    uni_raw_score_list = []
+    # loop through each sent
+    for sent_p in token_paragraph_uni:
+        raw_score_uni = 0
+        # loop through each unigram
+        for word_s in sent_p:
+            for word_q in token_question_uni:
+                if word_s == word_q:
+                    raw_score_uni += 1
+        uni_raw_score_list.append(raw_score_uni)
+    return uni_raw_score_list
+
+#subfunction of make_score
+def bi_score(token_paragraph_bi,token_question_bi):
+    bi_raw_score_list = []
+    # loop through each sent
+    for sent_p in token_paragraph_bi:
+        raw_score_bi = 0
+        # loop through each unigram
+        for word_s in sent_p:
+            for word_q in token_question_bi:
+                if word_s == word_q:
+                    raw_score_bi += 1
+        bi_raw_score_list.append(raw_score_bi)
+    return bi_raw_score_list
+
 def make_score(token_paragraph, token_question):
     '''
       Input: a list of list represent a paragraph;
             a list of string or tuple represent a sentence;
       Output : a sorted dictionary of score represent similarity between each sentence and question. Key: Value:score (0-1)
     '''
-    pass
+    len_q = len(token_question['1'][0])
+    uni_raw_score_list = np.array(uni_score(token_paragraph['1'],token_question['1'][0]))
+    bi_raw_score_list = np.array(bi_score(token_paragraph['2'], token_question['2'][0]))
+    score_list = (1/3 *uni_raw_score_list + 2/3 * bi_raw_score_list)/len_q
+    score_dict={}
+    for i in range(len(score_list)):
+        score_dict[i] = score_list[i]
+    score_dict=sorted(score_dict.items(), key=operator.itemgetter(1),reverse=True)
 
+    return score_dict
 
 def answer_type(token_question):
     global QA_TYPE_MATCH
@@ -70,22 +149,25 @@ def parse(sentence, atype):
     '''
 
 
-def retrieve_answer(passage, questions):
+def retrieve_answer(paragraph, questions):
     '''
       Input: string of passage and question
       Output: answer
     '''
     # Step0: prepare paragraghs to unigrams and bigrams
-    para_token_set = (make_ngrams(paragraph), make_ngrams(paragraph, ngram=2))
+    para_token_set = (make_ngrams(paragraph,ngrams=[1,2]))
 
     answer_list = []
     for question in questions:
+
         # Step1: questions to unigrams and bigrams
-        question_token_set = (make_ngrams(question), make_ngrams(question, ngram=2))
+        question_token_set = (make_ngrams(question,ngrams=[1,2]))
 
         # Step2: window slide to find the match score between the passage sentence and the question
         score_sorted = make_score(para_token_set, question_token_set)
+        pprint.pprint(score_sorted)
 
+        '''
         # Step3:
         atype = answer_type(question_token_set[0])
 
@@ -98,21 +180,27 @@ def retrieve_answer(passage, questions):
         if not answer:
             answer = 'Did not find answer'
             print('Did not find answer')
-        answer_list.append(answer)
+        answer_list.append(answer)'''
+
 
     return answer_list
 # ------------------------------------------------------------------------------
 if __name__ == "__main__":
     train_dict = read_data("train-v1.1.json")
 
-    # pprint.pprint(train_dict)
-    #pprint.pprint(type(train_dict['data']))
 
     for QA_dict in train_dict['data']:
         for QA_article in QA_dict['paragraphs']:
 
-            paragraph = QA_dict['context']
-            pprint.pprint(paragraph)
+            paragraph = QA_article['context']
+            questions = []
+            for qa in QA_article['qas']:
+                questions.append(qa['question'])
+
+            retrieve_answer(paragraph, questions)
+            # pprint.pprint(paragraph)
+            # p = make_ngrams(paragraph, ngrams=[1,2])
+            # pprint.pprint(p)
             exit()
 
 
