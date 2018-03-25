@@ -13,11 +13,14 @@ from nltk.tokenize import sent_tokenize, RegexpTokenizer
 import numpy as np
 import operator
 import csv
-
+from nltk.parse.stanford import StanfordParser
+from random import *
 
 
 # global variables listed here
-QA_TYPE_MATCH = {'what':'NP','when':'CD','how':'NN','where':'NP','whom':'NP','why':'NN','who':'NP','which':'NP','whose':'NN','name':'NP','example':'NP'}  # a dictionary maps question type to answer type
+QA_TYPE_MATCH = {'what':'NP','when':'CD','where':'NP','whom':'NP','why':'NP',
+                 'who':'NP','which':'NP','whose':'NP','name':'NP','example':'NP','how many':'CD',
+                 'how often':'CD'}  # a dictionary maps question type to answer type
 tokenizer = RegexpTokenizer(r'\w+')
 
 # -------------
@@ -137,10 +140,10 @@ def answer_type(token_question):
     '''
     aType = None
     contain = False
-
     for qMark in QA_TYPE_MATCH:
-        if qMark in token_question:
-            aType = qMark
+
+        if qMark in token_question[0]:
+            aType = QA_TYPE_MATCH[qMark]
             contain = True
             break
     if not contain:
@@ -148,19 +151,68 @@ def answer_type(token_question):
 
     return aType
 
+# subfunction of parse
+def ExtractPhrases(myTree, phrase):
+    # Tree manipulation from https://www.winwaed.com/blog/2012/01/20/extracting-noun-phrases-from-parsed-trees/
+    # Extract phrases from a parsed (chunked) tree
+    # Phrase = tag for the string phrase (sub-tree) to extract
+    # Returns: List of deep copies;  Recursive
+    myPhrases = []
+    if (myTree.label() == phrase):
+        myPhrases.append(myTree.copy(True))
+    for child in myTree:
+        if (type(child) is nltk.tree.Tree):
+            list_of_phrases = ExtractPhrases(child, phrase)
+            if (len(list_of_phrases) > 0):
+                myPhrases.extend(list_of_phrases)
+    return myPhrases
 
-def parse(sentence, atype):
 
+def parse(sentence, atype, parser):
     '''
-      Input: sentence: one sentence
-             atype: a string, target POS tag
-      Function: loop through sentences from high score to low and find first word of answer type
-      Output: string of answer. if fail to find, return None
+  Input: sentence: two sentences tuple
+         atype: a string, target POS tag
+         parser: use Stanford coreNLP parser, defined in main
+  Function: loop through sentences from high score to low and find first word of answer type
+  Output: string of answer. if fail to find, return None
+'''
 
-    '''
+    s1, s2 = sentence
+    potential_answer = []
+
+    # parse s1
+    assert (s1)
+    result = list(parser.raw_parse(s1))
+    tree = result[0]
+
+    list_of_phrases = ExtractPhrases(tree, atype)
+    potential_answer = []
+    for phrase in list_of_phrases:
+        # print (">> ", phrase.leaves())
+        potential_answer.append(phrase.leaves())
+
+    # if atype not found in s1, parse s2
+    if len(potential_answer) == 0:
+        if s2 is None:
+            return None
+        else:
+            result = list(parser.raw_parse(s2))
+            tree = result[0]
+            list_of_phrases = ExtractPhrases(tree, atype)
+            for phrase in list_of_phrases:
+                # print (">> ", phrase.leaves())
+                potential_answer.append(phrase.leaves())
+
+        if len(potential_answer) == 0: return None
+
+    # *randomly return one answer
+    potential_length = len(potential_answer)
+    rmd_index = randint(1, potential_length)-1
+    answer = potential_answer[rmd_index]
+    return (' '.join(answer))
 
 
-def retrieve_answer(paragraph, questions):
+def retrieve_answer(paragraph, questions , parser):
     '''
       Input: string of passage and question
       Output: answer
@@ -196,24 +248,27 @@ def retrieve_answer(paragraph, questions):
 
         # Step3:
         atype = answer_type(question_token_set['1'])
+
         if atype is None:
             untrack+=1
-        '''
+
         # if the top scored sentence does not contain the target answer type, go to the next sentence.
-        answer = ''
-        for each in score_sorted:
-            answer = parse(para_token_set[each], atype)
-            if answer:
-                break
-        if not answer:
-            answer = 'Did not find answer'
-            print('Did not find answer')
-        answer_list.append(answer)'''
 
+        answer = parse(candidate_sent, atype , parser)
+        answer_list.append(answer)
 
-    return sent_list
+    return answer_list
 # ------------------------------------------------------------------------------
 if __name__ == "__main__":
+
+    # for parse:
+
+    path_to_models_jar = '/Users/G_bgyl/si630/project/stanford-corenlp-full-2018-02-27/stanford-corenlp-3.9.1-models.jar'  # change to your path
+
+    path_to_jar = '/Users/G_bgyl/si630/project/stanford-corenlp-full-2018-02-27/stanford-corenlp-3.9.1.jar'  # change to your path
+
+    parser = StanfordParser(path_to_jar=path_to_jar, path_to_models_jar=path_to_models_jar)
+
     train_dict = read_data("train-v1.1.json")
 
     #for intuition:
@@ -239,23 +294,27 @@ if __name__ == "__main__":
                 test_question.append(qa['question'].lower())
 
             # for test sentence retrival accuracy
-            sent_list = retrieve_answer(paragraph, questions)
-            for i in range(len(sent_list)):
-                if answers[i] in sent_list[i][0]:
-                    right+=1
-                    # print('Yay!')
-                elif answers[i] in sent_list[i][1]:
-                    right+=1
-                    # print('Yay!')
-                else:
+            answer_list = retrieve_answer(paragraph, questions,parser)
+            for i in range(len(answer_list)):
+                print(answer_list[i])
+                find = False
+                for candi_answer in answer_list[i]:
+
+                    if answers[i] in candi_answer:
+                        right+=1
+                        print('Yay!')
+                        find = True
+                        break
+
+                if not find:
                     wrong += 1
-                    # print('answer:',answers[i])
-                    # print('sentence:',sent_list[i])
-                    # print('question:',questions[i],'\n')
-    print(right)
-    print(wrong)
-    print('sentence retrival accuracy:',right/(right+wrong))
-    exit()
+                    print('right answer:',answers[i])
+                    print('our answer:',answer_list[i])
+                    print('question:',questions[i],'\n')
+        print(right)
+        print(wrong)
+        print('sentence retrival accuracy:',right/(right+wrong))
+        exit()
     print(untrack)
 
     # output file to get intuition of questions.
