@@ -12,11 +12,12 @@ import nltk
 from nltk.tokenize import sent_tokenize, RegexpTokenizer
 import numpy as np
 import operator
+import csv
 
 
 
 # global variables listed here
-QA_TYPE_MATCH = {}  # a dictionary maps question type to answer type
+QA_TYPE_MATCH = {'what':'NN','when':'NN','how':'NN','where':'NN','whom':'NN','why':'NN','who':'NN','which':'NN','whose':'NN','name':'NN','example':'NN'}  # a dictionary maps question type to answer type
 tokenizer = RegexpTokenizer(r'\w+')
 
 # -------------
@@ -41,7 +42,6 @@ def make_ngrams(paragraph, ngrams=[1]):
     '''
 
     sent_tokenize_list = sent_tokenize(paragraph)
-    print(len(sent_tokenize_list))
     token_p={}
 
 
@@ -131,15 +131,26 @@ def make_score(token_paragraph, token_question):
 
 def answer_type(token_question):
     global QA_TYPE_MATCH
-
     '''
       Input: a list of String represent a question;
       Output: a string POS target type. Default NN.
     '''
-    return 'NN'
+    aType = None
+    contain = False
+
+    for qMark in QA_TYPE_MATCH:
+        if qMark in token_question:
+            aType = qMark
+            contain = True
+            break
+    if not contain:
+        pass
+
+    return aType
 
 
 def parse(sentence, atype):
+
     '''
       Input: sentence: one sentence
              atype: a string, target POS tag
@@ -154,10 +165,12 @@ def retrieve_answer(paragraph, questions):
       Input: string of passage and question
       Output: answer
     '''
+
     # Step0: prepare paragraghs to unigrams and bigrams
     para_token_set = (make_ngrams(paragraph,ngrams=[1,2]))
 
     answer_list = []
+    untrack = 0
     for question in questions:
 
         # Step1: questions to unigrams and bigrams
@@ -165,12 +178,15 @@ def retrieve_answer(paragraph, questions):
 
         # Step2: window slide to find the match score between the passage sentence and the question
         score_sorted = make_score(para_token_set, question_token_set)
-        pprint.pprint(score_sorted)
+        # print the highest sentence score
+        # pprint.pprint(score_sorted[0][1])
 
-        '''
+
         # Step3:
-        atype = answer_type(question_token_set[0])
-
+        atype = answer_type(question_token_set['1'])
+        if atype is None:
+            untrack+=1
+        '''
         # if the top scored sentence does not contain the target answer type, go to the next sentence.
         answer = ''
         for each in score_sorted:
@@ -188,19 +204,42 @@ def retrieve_answer(paragraph, questions):
 if __name__ == "__main__":
     train_dict = read_data("train-v1.1.json")
 
-
+    #for intuition:
+    test_question = []
+    untrack =0
+    #loop through all articles
     for QA_dict in train_dict['data']:
+        # loop through all paragraphs
         for QA_article in QA_dict['paragraphs']:
-
-            paragraph = QA_article['context']
+            paragraph = QA_article['context'].lower()
             questions = []
+            # loop through all qas
             for qa in QA_article['qas']:
-                questions.append(qa['question'])
+                questions.append(qa['question'].lower())
 
-            retrieve_answer(paragraph, questions)
-            # pprint.pprint(paragraph)
-            # p = make_ngrams(paragraph, ngrams=[1,2])
-            # pprint.pprint(p)
-            exit()
+                # for intuition:
+                test_question.append(qa['question'].lower())
+
+        untrack += retrieve_answer(paragraph, questions)
+    print(untrack)
+    # output file to get intuition of questions.
+    '''with open('all_question.csv', 'w') as all_question, open('untrack_question.csv', 'w') as untrack_question:
+        writer = csv.writer(all_question)
+        writer2 = csv.writer(untrack_question)
+
+        untrack = 0
+        for question in test_question:
+            contain =False
+            writer.writerow(question)
+            for qMark  in QA_TYPE_MATCH:
+                if qMark in question:
+                    contain = True
+                    break
+            if not contain:
+                writer2.writerow(question)'''
+
+
+
+
 
 
