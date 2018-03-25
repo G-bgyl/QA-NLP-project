@@ -17,7 +17,7 @@ import csv
 
 
 # global variables listed here
-QA_TYPE_MATCH = {'what':'NN','when':'NN','how':'NN','where':'NN','whom':'NN','why':'NN','who':'NN','which':'NN','whose':'NN','name':'NN','example':'NN'}  # a dictionary maps question type to answer type
+QA_TYPE_MATCH = {'what':'NP','when':'CD','how':'NN','where':'NP','whom':'NP','why':'NN','who':'NP','which':'NP','whose':'NN','name':'NP','example':'NP'}  # a dictionary maps question type to answer type
 tokenizer = RegexpTokenizer(r'\w+')
 
 # -------------
@@ -74,7 +74,7 @@ def make_ngrams(paragraph, ngrams=[1]):
                     new_ngram.append(list(token_s[j] for j in range(i,i+ngram)))
                 token_p[str(ngram)].append(new_ngram)
 
-    return token_p
+    return sent_tokenize_list,token_p
 
 
 
@@ -167,19 +167,31 @@ def retrieve_answer(paragraph, questions):
     '''
 
     # Step0: prepare paragraghs to unigrams and bigrams
-    para_token_set = (make_ngrams(paragraph,ngrams=[1,2]))
+    sent_tokenize_list, para_token_set = (make_ngrams(paragraph,ngrams=[1,2]))
 
     answer_list = []
+    sent_list = []
     untrack = 0
     for question in questions:
 
         # Step1: questions to unigrams and bigrams
-        question_token_set = (make_ngrams(question,ngrams=[1,2]))
+        unused_question_list,question_token_set = (make_ngrams(question,ngrams=[1,2]))
 
         # Step2: window slide to find the match score between the passage sentence and the question
         score_sorted = make_score(para_token_set, question_token_set)
-        # print the highest sentence score
-        # pprint.pprint(score_sorted[0][1])
+        if len(score_sorted)>1:
+            candidate_sent = (sent_tokenize_list[score_sorted[0][0]], sent_tokenize_list[score_sorted[1][0]])
+        else:
+            candidate_sent = (sent_tokenize_list[score_sorted[0][0]], None)
+        # for parse:
+
+        # candidate_sent = (sent_tokenize_list[score_sorted[0][0]],sent_tokenize_list[score_sorted[1][0]])
+
+        # for test sentence retrival accuracy
+        if len(score_sorted)>1:
+            sent_list.append((sent_tokenize_list[score_sorted[0][0]], sent_tokenize_list[score_sorted[1][0]]))
+        else:
+            sent_list.append((sent_tokenize_list[score_sorted[0][0]], ''))
 
 
         # Step3:
@@ -199,7 +211,7 @@ def retrieve_answer(paragraph, questions):
         answer_list.append(answer)'''
 
 
-    return answer_list
+    return sent_list
 # ------------------------------------------------------------------------------
 if __name__ == "__main__":
     train_dict = read_data("train-v1.1.json")
@@ -207,21 +219,45 @@ if __name__ == "__main__":
     #for intuition:
     test_question = []
     untrack =0
+    right = 0
+    wrong = 0
     #loop through all articles
     for QA_dict in train_dict['data']:
         # loop through all paragraphs
         for QA_article in QA_dict['paragraphs']:
             paragraph = QA_article['context'].lower()
             questions = []
+            answers=[]
             # loop through all qas
             for qa in QA_article['qas']:
                 questions.append(qa['question'].lower())
+                for answer in qa['answers']:
+
+                    answers.append(answer['text'].lower())
 
                 # for intuition:
                 test_question.append(qa['question'].lower())
 
-        untrack += retrieve_answer(paragraph, questions)
+            # for test sentence retrival accuracy
+            sent_list = retrieve_answer(paragraph, questions)
+            for i in range(len(sent_list)):
+                if answers[i] in sent_list[i][0]:
+                    right+=1
+                    # print('Yay!')
+                elif answers[i] in sent_list[i][1]:
+                    right+=1
+                    # print('Yay!')
+                else:
+                    wrong += 1
+                    # print('answer:',answers[i])
+                    # print('sentence:',sent_list[i])
+                    # print('question:',questions[i],'\n')
+    print(right)
+    print(wrong)
+    print('sentence retrival accuracy:',right/(right+wrong))
+    exit()
     print(untrack)
+
     # output file to get intuition of questions.
     '''with open('all_question.csv', 'w') as all_question, open('untrack_question.csv', 'w') as untrack_question:
         writer = csv.writer(all_question)
