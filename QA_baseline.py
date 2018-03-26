@@ -16,12 +16,12 @@ import csv
 from nltk.parse.stanford import StanfordParser
 from random import *
 
-
 # global variables listed here
-QA_TYPE_MATCH = {'what':'NP','when':'CD','where':'NP','whom':'NP','why':'NP',
-                 'who':'NP','which':'NP','whose':'NP','name':'NP','example':'NP','how many':'CD',
-                 'how often':'CD'}  # a dictionary maps question type to answer type
+QA_TYPE_MATCH = {'what': 'NP', 'when': 'CD', 'where': 'NP', 'whom': 'NP', 'why': 'NP',
+                 'who': 'NP', 'which': 'NP', 'whose': 'NP', 'name': 'NP', 'example': 'NP', 'how many': 'CD',
+                 'how often': 'CD'}  # a dictionary maps question type to answer type
 tokenizer = RegexpTokenizer(r'\w+')
+
 
 # -------------
 # Read in data
@@ -45,40 +45,36 @@ def make_ngrams(paragraph, ngrams=[1]):
     '''
 
     sent_tokenize_list = sent_tokenize(paragraph)
-    token_p={}
-
+    token_p = {}
 
     for ngram in ngrams:
-        if ngram ==1:
-            token_p['1']=[]
+        if ngram == 1:
+            token_p['1'] = []
             for sent in sent_tokenize_list:
-
-                token_sent =tokenizer.tokenize(sent)
+                token_sent = tokenizer.tokenize(sent.lower())
 
                 token_p['1'].append(token_sent)
-        elif ngram==2:
+        elif ngram == 2:
             token_p['2'] = []
             for sent in sent_tokenize_list:
-                token_sent = tokenizer.tokenize(sent)
-                bi_token_sent =list(nltk.bigrams(token_sent))
+                token_sent = tokenizer.tokenize(sent.lower())
+                bi_token_sent = list(nltk.bigrams(token_sent))
 
                 token_p['2'].append(bi_token_sent)
 
         else:
-            token_p[str(ngram)]=[]
+            token_p[str(ngram)] = []
             # haven't test
             for sent in sent_tokenize_list:
-                token_s = tokenizer.tokenize(sent)
-
+                token_s = tokenizer.tokenize(sent.lower())
 
                 new_ngram = []
                 i = 0
-                for i in range(len(token_s)-ngram):
-                    new_ngram.append(list(token_s[j] for j in range(i,i+ngram)))
+                for i in range(len(token_s) - ngram):
+                    new_ngram.append(list(token_s[j] for j in range(i, i + ngram)))
                 token_p[str(ngram)].append(new_ngram)
 
-    return sent_tokenize_list,token_p
-
+    return sent_tokenize_list, token_p
 
 
 # -------------
@@ -87,8 +83,8 @@ def make_ngrams(paragraph, ngrams=[1]):
 #  subfunction: uni_score, bi_score
 # -------------
 
-#subfunction of make_score
-def uni_score(token_paragraph_uni,token_question_uni):
+# subfunction of make_score
+def uni_score(token_paragraph_uni, token_question_uni):
     uni_raw_score_list = []
     # loop through each sent
     for sent_p in token_paragraph_uni:
@@ -101,8 +97,9 @@ def uni_score(token_paragraph_uni,token_question_uni):
         uni_raw_score_list.append(raw_score_uni)
     return uni_raw_score_list
 
-#subfunction of make_score
-def bi_score(token_paragraph_bi,token_question_bi):
+
+# subfunction of make_score
+def bi_score(token_paragraph_bi, token_question_bi):
     bi_raw_score_list = []
     # loop through each sent
     for sent_p in token_paragraph_bi:
@@ -115,6 +112,7 @@ def bi_score(token_paragraph_bi,token_question_bi):
         bi_raw_score_list.append(raw_score_bi)
     return bi_raw_score_list
 
+
 def make_score(token_paragraph, token_question):
     '''
       Input: a list of list represent a paragraph;
@@ -122,15 +120,16 @@ def make_score(token_paragraph, token_question):
       Output : a sorted dictionary of score represent similarity between each sentence and question. Key: Value:score (0-1)
     '''
     len_q = len(token_question['1'][0])
-    uni_raw_score_list = np.array(uni_score(token_paragraph['1'],token_question['1'][0]))
+    uni_raw_score_list = np.array(uni_score(token_paragraph['1'], token_question['1'][0]))
     bi_raw_score_list = np.array(bi_score(token_paragraph['2'], token_question['2'][0]))
-    score_list = (1/3 *uni_raw_score_list + 2/3 * bi_raw_score_list)/len_q
-    score_dict={}
+    score_list = (1 / 3 * uni_raw_score_list + 2 / 3 * bi_raw_score_list) / len_q
+    score_dict = {}
     for i in range(len(score_list)):
         score_dict[i] = score_list[i]
-    score_dict=sorted(score_dict.items(), key=operator.itemgetter(1),reverse=True)
+    score_dict = sorted(score_dict.items(), key=operator.itemgetter(1), reverse=True)
 
     return score_dict
+
 
 def answer_type(token_question):
     global QA_TYPE_MATCH
@@ -151,6 +150,7 @@ def answer_type(token_question):
 
     return aType
 
+
 # subfunction of parse
 def ExtractPhrases(myTree, phrase):
     # Tree manipulation from https://www.winwaed.com/blog/2012/01/20/extracting-noun-phrases-from-parsed-trees/
@@ -170,15 +170,19 @@ def ExtractPhrases(myTree, phrase):
 
 def parse(sentence, atype, parser):
     '''
-  Input: sentence: two sentences tuple
-         atype: a string, target POS tag
-         parser: use Stanford coreNLP parser, defined in main
-  Function: loop through sentences from high score to low and find first word of answer type
-  Output: string of answer. if fail to find, return None
-'''
-
+      Input: sentence: two sentences tuple
+             atype: a string, target POS tag
+             parser: use Stanford coreNLP parser, defined in main
+      Function: loop through sentences from high score to low and find first word of answer type
+      Output: string of answer. if fail to find, return None
+    '''
     s1, s2 = sentence
+    # s1 = 'it is a replica of the grotto at lourdes, france where the virgin mary reputedly appeared to saint bernadette soubirous in 1858.'
+    # print ("Sent: ",sentence)
+    # print ("s1: ",s1)
+    # print ("s2: ", s2)
     potential_answer = []
+    # atype = "NP"
 
     # parse s1
     assert (s1)
@@ -189,37 +193,57 @@ def parse(sentence, atype, parser):
     potential_answer = []
     for phrase in list_of_phrases:
         # print (">> ", phrase.leaves())
-        potential_answer.append(phrase.leaves())
+        potential_answer.append(" ".join(phrase.leaves()))
+        # print ("PA:>> "," ".join(phrase.leaves()))
 
     # if atype not found in s1, parse s2
     if len(potential_answer) == 0:
         if s2 is None:
             return None
         else:
+            # print ("@S2")
             result = list(parser.raw_parse(s2))
             tree = result[0]
             list_of_phrases = ExtractPhrases(tree, atype)
             for phrase in list_of_phrases:
                 # print (">> ", phrase.leaves())
-                potential_answer.append(phrase.leaves())
+                potential_answer.append(" ".join(phrase.leaves()))
 
         if len(potential_answer) == 0: return None
 
+    potential_answer.sort(key=len)
+    rm = []  # long sentences to remove
+
+    for i in range(len(potential_answer)):
+        if i == len(potential_answer): break
+        for j in range(i + 1, len(potential_answer)):
+            if potential_answer[i] in potential_answer[j]:
+                rm.append(potential_answer[j])
+                # print ("RM: ", potential_answer[j])
+    nrrw = [fruit for fruit in potential_answer if fruit not in rm]  # narrowed candidates
+
+    # for i in nrrw:
+    # print ("nrrw: >> ",i)
+
     # *randomly return one answer
-    potential_length = len(potential_answer)
-    rmd_index = randint(1, potential_length)-1
-    answer = potential_answer[rmd_index]
-    return (' '.join(answer))
+    bef_length = len(potential_answer)
+    aft_length = len(nrrw)
+    rmd_index = randint(1, aft_length) - 1
+    answer = nrrw[rmd_index]
+    print("Before removing, we have: ", bef_length, "After we have: ", aft_length)
+    # print ("Answer: ", answer)
+    # exit()
+    return (answer)
 
 
-def retrieve_answer(paragraph, questions , parser):
+def retrieve_answer(paragraph, questions, parser):
     '''
       Input: string of passage and question
       Output: answer
     '''
 
     # Step0: prepare paragraghs to unigrams and bigrams
-    sent_tokenize_list, para_token_set = (make_ngrams(paragraph,ngrams=[1,2]))
+    sent_tokenize_list, para_token_set = (make_ngrams(paragraph, ngrams=[1, 2]))
 
     answer_list = []
     sent_list = []
@@ -227,11 +251,13 @@ def retrieve_answer(paragraph, questions , parser):
     for question in questions:
 
         # Step1: questions to unigrams and bigrams
-        unused_question_list,question_token_set = (make_ngrams(question,ngrams=[1,2]))
+        unused_question_list, question_token_set = (make_ngrams(question, ngrams=[1, 2]))
 
         # Step2: window slide to find the match score between the passage sentence and the question
         score_sorted = make_score(para_token_set, question_token_set)
-        if len(score_sorted)>1:
+        # print('question:',question)
+        # print('sentence:',sent_tokenize_list[score_sorted[0][0]],'\n')
+        if len(score_sorted) > 1:
             candidate_sent = (sent_tokenize_list[score_sorted[0][0]], sent_tokenize_list[score_sorted[1][0]])
         else:
             candidate_sent = (sent_tokenize_list[score_sorted[0][0]], None)
@@ -240,24 +266,25 @@ def retrieve_answer(paragraph, questions , parser):
         # candidate_sent = (sent_tokenize_list[score_sorted[0][0]],sent_tokenize_list[score_sorted[1][0]])
 
         # for test sentence retrival accuracy
-        if len(score_sorted)>1:
+        if len(score_sorted) > 1:
             sent_list.append((sent_tokenize_list[score_sorted[0][0]], sent_tokenize_list[score_sorted[1][0]]))
         else:
             sent_list.append((sent_tokenize_list[score_sorted[0][0]], ''))
-
 
         # Step3:
         atype = answer_type(question_token_set['1'])
 
         if atype is None:
-            untrack+=1
+            untrack += 1
 
         # if the top scored sentence does not contain the target answer type, go to the next sentence.
 
-        answer = parse(candidate_sent, atype , parser)
+        answer = parse(candidate_sent, atype, parser)
         answer_list.append(answer)
 
     return answer_list
+
+
 # ------------------------------------------------------------------------------
 if __name__ == "__main__":
 
@@ -271,49 +298,51 @@ if __name__ == "__main__":
 
     train_dict = read_data("train-v1.1.json")
 
-    #for intuition:
-    test_question = []
-    untrack =0
+    # for intuition:
+    # test_question = []
+    untrack = 0
     right = 0
     wrong = 0
-    #loop through all articles
+    # loop through all articles
     for QA_dict in train_dict['data']:
         # loop through all paragraphs
         for QA_article in QA_dict['paragraphs']:
-            paragraph = QA_article['context'].lower()
+            paragraph = QA_article['context']
             questions = []
-            answers=[]
+            answers = []
             # loop through all qas
             for qa in QA_article['qas']:
-                questions.append(qa['question'].lower())
+                questions.append(qa['question'])
                 for answer in qa['answers']:
-
-                    answers.append(answer['text'].lower())
+                    answers.append(answer['text'])
 
                 # for intuition:
-                test_question.append(qa['question'].lower())
+                # test_question.append(qa['question'])
 
             # for test sentence retrival accuracy
-            answer_list = retrieve_answer(paragraph, questions,parser)
+            answer_list = retrieve_answer(paragraph, questions, parser)
             for i in range(len(answer_list)):
-                print(answer_list[i])
-                find = False
-                for candi_answer in answer_list[i]:
 
-                    if answers[i] in candi_answer:
-                        right+=1
-                        print('Yay!')
-                        find = True
-                        break
+                find = False
+
+                if answers[i] in answer_list[i] or answer_list[i] in answers[i] or answer_list[i] == answers[i]:
+                    right += 1
+                    print('Yay!')
+                    print('right answer:', answers[i], 'our answer:', answer_list[i])
+                    print('\n')
+                    find = True
+                    break
+                # else:
+                #     print('right answer:', answers[i])
+                #     print('our answer:', answer_list[i])
 
                 if not find:
                     wrong += 1
-                    print('right answer:',answers[i])
-                    print('our answer:',answer_list[i])
-                    print('question:',questions[i],'\n')
+                    print('right answer:', answers[i])
+                    print('our answer:', answer_list[i], '\n')
         print(right)
         print(wrong)
-        print('sentence retrival accuracy:',right/(right+wrong))
+        print('sentence retrival accuracy:', right / (right + wrong))
         exit()
     print(untrack)
 
@@ -332,9 +361,3 @@ if __name__ == "__main__":
                     break
             if not contain:
                 writer2.writerow(question)'''
-
-
-
-
-
-
