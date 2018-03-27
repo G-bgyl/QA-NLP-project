@@ -137,7 +137,7 @@ def answer_type(token_question):
       Input: a list of String represent a question;
       Output: a string POS target type. Default NN.
     '''
-    aType = None
+    aType = 'NP'
     contain = False
     for qMark in QA_TYPE_MATCH:
 
