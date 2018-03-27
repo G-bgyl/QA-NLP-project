@@ -19,7 +19,7 @@ from random import *
 # global variables listed here
 QA_TYPE_MATCH = {'what': 'NP', 'when': 'CD', 'where': 'NP', 'whom': 'NP', 'why': 'NP',
                  'who': 'NP', 'which': 'NP', 'whose': 'NP', 'name': 'NP', 'example': 'NP', 'how many': 'CD',
-                 'how often': 'CD'}  # a dictionary maps question type to answer type
+                 'how often': 'CD','what year':'CD','location':'NP'}  # a dictionary maps question type to answer type
 tokenizer = RegexpTokenizer(r'\w+')
 
 
@@ -230,7 +230,7 @@ def parse(sentence, atype, parser):
     aft_length = len(nrrw)
     rmd_index = randint(1, aft_length) - 1
     answer = nrrw[rmd_index]
-    print("Before removing, we have: ", bef_length, "After we have: ", aft_length)
+    print("Before removing, we have: ", bef_length, "After we have: ", aft_length, '\n')
     # print ("Answer: ", answer)
     # exit()
     return (answer)
@@ -255,8 +255,8 @@ def retrieve_answer(paragraph, questions, parser):
 
         # Step2: window slide to find the match score between the passage sentence and the question
         score_sorted = make_score(para_token_set, question_token_set)
-        # print('question:',question)
-        # print('sentence:',sent_tokenize_list[score_sorted[0][0]],'\n')
+        print('question:',question)
+        print('sentence:',sent_tokenize_list[score_sorted[0][0]])
         if len(score_sorted) > 1:
             candidate_sent = (sent_tokenize_list[score_sorted[0][0]], sent_tokenize_list[score_sorted[1][0]])
         else:
@@ -280,6 +280,7 @@ def retrieve_answer(paragraph, questions, parser):
         # if the top scored sentence does not contain the target answer type, go to the next sentence.
 
         answer = parse(candidate_sent, atype, parser)
+        print('answer:', answer)
         answer_list.append(answer)
 
     return answer_list
@@ -296,7 +297,7 @@ if __name__ == "__main__":
 
     parser = StanfordParser(path_to_jar=path_to_jar, path_to_models_jar=path_to_models_jar)
 
-    train_dict = read_data("train-v1.1.json")
+    train_dict = read_data("dev-v1.1.json")
 
     # for intuition:
     # test_question = []
@@ -325,26 +326,33 @@ if __name__ == "__main__":
 
                 find = False
 
-                if answers[i] in answer_list[i] or answer_list[i] in answers[i] or answer_list[i] == answers[i]:
-                    right += 1
-                    print('Yay!')
-                    print('right answer:', answers[i], 'our answer:', answer_list[i])
-                    print('\n')
-                    find = True
-                    break
-                # else:
-                #     print('right answer:', answers[i])
-                #     print('our answer:', answer_list[i])
+                if answers[i]:
+                    if answer_list[i]:
+                        if answers[i] in answer_list[i] or answer_list[i] in answers[i] or answer_list[i] == answers[i]:
+                            right += 1
+                            print('Yay!')
+                            print('right answer:', answers[i], 'our answer:', answer_list[i])
+                            print('question:', questions[i], '\n')
+                            find = True
+                            continue
+                    else:
+                        print('answer_list[',i,'] went wrong')
+                        print(len(answer_list),answer_list)
+                else:
+                    print('answers[', i, '] went wrong')
+
 
                 if not find:
                     wrong += 1
                     print('right answer:', answers[i])
-                    print('our answer:', answer_list[i], '\n')
-        print(right)
-        print(wrong)
-        print('sentence retrival accuracy:', right / (right + wrong))
-        exit()
-    print(untrack)
+                    print('our answer:', answer_list[i])
+                    print('question:',questions[i],'\n')
+
+    print(right)
+    print(wrong)
+    print('sentence retrival accuracy:', right / (right + wrong))
+
+
 
     # output file to get intuition of questions.
     '''with open('all_question.csv', 'w') as all_question, open('untrack_question.csv', 'w') as untrack_question:
