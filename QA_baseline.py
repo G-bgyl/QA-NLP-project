@@ -347,10 +347,13 @@ if __name__ == "__main__":
                     print('right answer:', answers[i])
                     print('our answer:', answer_list[i])
                     print('question:',questions[i],'\n')
+        print('count of right:',right)
+        print('count of wrong:',wrong)
+        print('sentence retrival accuracy for single article:', right / (right + wrong))
 
-    print(right)
-    print(wrong)
-    print('sentence retrival accuracy:', right / (right + wrong))
+    print('count of right:',right)
+    print('count of wrong:',wrong)
+    print('sentence retrival accuracy for whole dev data:', right / (right + wrong))
 
 
 
