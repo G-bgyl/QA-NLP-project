@@ -230,10 +230,10 @@ def parse(sentence, atype, parser):
     aft_length = len(nrrw)
     rmd_index = randint(1, aft_length) - 1
     answer = nrrw[rmd_index]
-    print("Before removing, we have: ", bef_length, "After we have: ", aft_length, '\n')
+    print("Before removing, we have: ", bef_length, "After we have: ", aft_length)
     # print ("Answer: ", answer)
     # exit()
-    return (answer)
+    return (answer,aft_length)
 
 
 def retrieve_answer(paragraph, questions, parser):
@@ -246,6 +246,7 @@ def retrieve_answer(paragraph, questions, parser):
     sent_tokenize_list, para_token_set = (make_ngrams(paragraph, ngrams=[1, 2]))
 
     answer_list = []
+    aft_length_list=[]
     sent_list = []
     untrack = 0
     for question in questions:
@@ -279,11 +280,12 @@ def retrieve_answer(paragraph, questions, parser):
 
         # if the top scored sentence does not contain the target answer type, go to the next sentence.
 
-        answer = parse(candidate_sent, atype, parser)
-        print('answer:', answer)
+        (answer,aft_length) = parse(candidate_sent, atype, parser)
+        print('answer:', answer, '\n')
         answer_list.append(answer)
+        aft_length_list.append(aft_length)
 
-    return answer_list
+    return answer_list,aft_length_list
 
 
 # ------------------------------------------------------------------------------
@@ -299,71 +301,81 @@ if __name__ == "__main__":
 
     train_dict = read_data("dev-v1.1.json")
 
-    # for intuition:
-    # test_question = []
-    untrack = 0
+    # for test output:
+    test_output = []
+
     right = 0
     wrong = 0
-    # loop through all articles
-    for QA_dict in train_dict['data']:
-        # loop through all paragraphs
-        for QA_article in QA_dict['paragraphs']:
-            paragraph = QA_article['context']
-            questions = []
-            answers = []
-            # loop through all qas
-            for qa in QA_article['qas']:
-                questions.append(qa['question'])
-                for answer in qa['answers']:
-                    answers.append(answer['text'])
+    with open('baseline_dev_result.csv', 'w') as baseline_dev_result: # , open('untrack_question.csv', 'w') as untrack_question
+        writer = csv.writer(baseline_dev_result)
+        writer.writerow(['Question', 'Correct Answer', 'Our Answer', 'Candidate Number','Correct'])
+        # loop through all articles
+        for QA_dict in train_dict['data']:
+            # loop through all paragraphs
+            for QA_article in QA_dict['paragraphs']:
+                paragraph = QA_article['context']
+                questions = []
+                answers = []
+                # loop through all qas
+                for qa in QA_article['qas']:
+                    questions.append(qa['question'])
+                    for answer in qa['answers']:
+                        answers.append(answer['text'])
 
-                # for intuition:
-                # test_question.append(qa['question'])
+                    # for intuition:
+                    # test_question.append(qa['question'])
 
-            # for test sentence retrival accuracy
-            answer_list = retrieve_answer(paragraph, questions, parser)
-            for i in range(len(answer_list)):
+                # for test sentence retrival accuracy
+                answer_list,aft_length_list = retrieve_answer(paragraph, questions, parser)
+                for i in range(len(answer_list)):
 
-                find = False
+                    find = False
 
-                if answers[i]:
-                    if answer_list[i]:
-                        if answers[i] in answer_list[i] or answer_list[i] in answers[i] or answer_list[i] == answers[i]:
-                            right += 1
-                            print('Yay!')
-                            print('right answer:', answers[i], 'our answer:', answer_list[i])
-                            print('question:', questions[i], '\n')
-                            find = True
-                            continue
+                    if answers[i]:
+                        if answer_list[i]:
+                            if answers[i] in answer_list[i] or answer_list[i] in answers[i] or answer_list[i] == answers[i]:
+                                right += 1
+                                print('Yay!')
+                                print('right answer:', answers[i])
+                                print('our answer:', answer_list[i])
+                                print('question:', questions[i])
+                                print('candidate number:', aft_length_list[i], '\n')
+                                find = True
+                                row = [questions[i],answers[i],answer_list[i],aft_length_list[i],1]
+                                writer.writerow(row)
+                                continue
+                        else:
+                            print('answer_list[',i,'] went wrong')
+                            print(len(answer_list),answer_list)
                     else:
-                        print('answer_list[',i,'] went wrong')
-                        print(len(answer_list),answer_list)
-                else:
-                    print('answers[', i, '] went wrong')
+                        print('answers[', i, '] went wrong')
 
 
-                if not find:
-                    wrong += 1
-                    print('right answer:', answers[i])
-                    print('our answer:', answer_list[i])
-                    print('question:',questions[i],'\n')
+                    if not find:
+                        wrong += 1
+                        print('right answer:', answers[i])
+                        print('our answer:', answer_list[i])
+                        print('question:',questions[i])
+                        print('candidate number:',aft_length_list[i],'\n')
+                        row = [questions[i], answers[i], answer_list[i],aft_length_list[i], 0]
+                        writer.writerow(row)
+            print('count of right:',right)
+            print('count of wrong:',wrong)
+            print('sentence retrival accuracy for single article:', right / (right + wrong))
+
         print('count of right:',right)
         print('count of wrong:',wrong)
-        print('sentence retrival accuracy for single article:', right / (right + wrong))
-
-    print('count of right:',right)
-    print('count of wrong:',wrong)
-    print('sentence retrival accuracy for whole dev data:', right / (right + wrong))
+        print('sentence retrival accuracy for whole dev data:', right / (right + wrong))
 
 
 
     # output file to get intuition of questions.
-    '''with open('all_question.csv', 'w') as all_question, open('untrack_question.csv', 'w') as untrack_question:
-        writer = csv.writer(all_question)
+        '''with open('baseline_dev_result.csv', 'w') as baseline_dev_result, open('untrack_question.csv', 'w') as untrack_question：
+        writer = csv.writer(baseline_dev_result)
         writer2 = csv.writer(untrack_question)
 
         untrack = 0
-        for question in test_question:
+        for question in test_output:
             contain =False
             writer.writerow(question)
             for qMark  in QA_TYPE_MATCH:

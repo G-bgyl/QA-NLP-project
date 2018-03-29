@@ -4,3 +4,5 @@ test.py
 .ipynb_checkpoints/
 Workshop-TensorFlow-Estimators/
 stanford-corenlp-full-2018-02-27/
+test.csv
+baseline_dev_result.csv
