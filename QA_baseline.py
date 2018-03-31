@@ -10,9 +10,11 @@ import json
 import pprint
 import nltk
 from nltk.tokenize import sent_tokenize, RegexpTokenizer
+from nltk.corpus import stopwords
 import numpy as np
 import operator
 import csv
+import copy
 from nltk.parse.stanford import StanfordParser
 from random import *
 
@@ -152,88 +154,136 @@ def answer_type(token_question):
 
 
 # subfunction of parse
-def ExtractPhrases(myTree, phrase):
+def ExtractPhrasesBottom(myTree, phrase):
     # Tree manipulation from https://www.winwaed.com/blog/2012/01/20/extracting-noun-phrases-from-parsed-trees/
     # Extract phrases from a parsed (chunked) tree
     # Phrase = tag for the string phrase (sub-tree) to extract
     # Returns: List of deep copies;  Recursive
     myPhrases = []
+
     if (myTree.label() == phrase):
         myPhrases.append(myTree.copy(True))
+
     for child in myTree:
         if (type(child) is nltk.tree.Tree):
-            list_of_phrases = ExtractPhrases(child, phrase)
+            list_of_phrases = ExtractPhrasesBottom(child, phrase)
             if (len(list_of_phrases) > 0):
                 myPhrases.extend(list_of_phrases)
     return myPhrases
 
 
-def parse(sentence, atype, parser):
-    '''
-      Input: sentence: two sentences tuple
-             atype: a string, target POS tag
-             parser: use Stanford coreNLP parser, defined in main
-      Function: loop through sentences from high score to low and find first word of answer type
-      Output: string of answer. if fail to find, return None
-    '''
-    s1, s2 = sentence
-    # s1 = 'it is a replica of the grotto at lourdes, france where the virgin mary reputedly appeared to saint bernadette soubirous in 1858.'
-    # print ("Sent: ",sentence)
-    # print ("s1: ",s1)
-    # print ("s2: ", s2)
-    potential_answer = []
-    # atype = "NP"
+def ExtractPhrasesTop( myTree, phrase):
+    myPhrases = []
+    if (myTree.label() == phrase):
+        myPhrases.append( myTree.copy(True) )
+        return myPhrases
+    for child in myTree:  
+        if (type(child) is nltk.tree.Tree):
+            list_of_phrases = ExtractPhrasesTop(child, phrase)
+            if (len(list_of_phrases) > 0):
+                myPhrases.extend(list_of_phrases)
+        
+    return myPhrases
 
-    # parse s1
-    assert (s1)
-    result = list(parser.raw_parse(s1))
+    
+
+def prepare_candidates(question, sentence, atype, parser):
+    question_token_list = nltk.word_tokenize(question)
+    stop_words = list(stopwords.words('english'))
+    stop_words.extend(['.', ','])
+
+    filtered_question = [w for w in question_token_list if not w in stop_words]
+    print ("Q_token: ", filtered_question)
+
+    #sentence = "It is a replica of the grotto at Lourdes, France where the Virgin Mary reputedly appeared to Saint Bernadette Soubirous in 1858."
+    if len(sentence) == 0: return None
+
+    result = list(parser.raw_parse(sentence))
+
     tree = result[0]
+  
+  ##### for top level
+    top_level = ExtractPhrasesTop(tree, atype)
+    top_candidates = []
+    for phrase in top_level:
+        top_candidates.append(" ".join(phrase.leaves()))
+    top_nrrw = [fruit for fruit in top_candidates if fruit not in ['it', "It"]]
+    print (">> Top: ",top_nrrw)
 
-    list_of_phrases = ExtractPhrases(tree, atype)
-    potential_answer = []
-    for phrase in list_of_phrases:
-        # print (">> ", phrase.leaves())
-        potential_answer.append(" ".join(phrase.leaves()))
+
+
+  ##### for bottom level
+    bottom_level = ExtractPhrasesBottom(tree, atype)
+    bottom_candidates = []
+    for phrase in bottom_level:
+        bottom_candidates.append(" ".join(phrase.leaves()))
         # print ("PA:>> "," ".join(phrase.leaves()))
 
-    # if atype not found in s1, parse s2
-    if len(potential_answer) == 0:
-        if s2 is None:
-            return None
-        else:
-            # print ("@S2")
-            result = list(parser.raw_parse(s2))
-            tree = result[0]
-            list_of_phrases = ExtractPhrases(tree, atype)
-            for phrase in list_of_phrases:
-                # print (">> ", phrase.leaves())
-                potential_answer.append(" ".join(phrase.leaves()))
+    bottom_candidates.sort(key=len)
+    rm = ['it', "It"]  # long sentences to remove, we also remove 'it'
 
-        if len(potential_answer) == 0: return None
+    for i in range(len(bottom_candidates)):
+        if i == len(bottom_candidates): break
+        for j in range(i + 1, len(bottom_candidates)):
+            if bottom_candidates[i] in bottom_candidates[j]:
+                rm.append(bottom_candidates[j])
 
-    potential_answer.sort(key=len)
-    rm = []  # long sentences to remove
+    bottom_nrrw = [fruit for fruit in bottom_candidates if fruit not in rm]  # narrowed candidates
+    print (">> Bottom: ", bottom_nrrw)
+  
+  
+  ##### Find Answer
+    
+    ## find from top level first
+    final_candidates = copy.copy(top_nrrw)
+    #print ("Question filtered: ", filtered_question)
+    # remove overlapping ones
+    for cand in top_nrrw: 
+        for token in filtered_question:
+            if token in cand:
+                final_candidates.remove(cand)
+                break
+    
+    print (">>TOPfinal_candidates: ", final_candidates)
+    
+    ## find from bottom level if top level is too broad
+    if len(final_candidates) == 0:
+        
+        # remove overlapping ones
+        final_candidates = copy.copy(bottom_nrrw)
+        for cand in bottom_nrrw:
+            for token in filtered_question:
+                if token in cand: 
+                    final_candidates.remove(cand)
+                    break
+        print (">>BOTTOMfinal_candidates: ", final_candidates)
+    
+    ### if didn't find anything, return none
+    if len(final_candidates) == 0: return None
+    else: return final_candidates
 
-    for i in range(len(potential_answer)):
-        if i == len(potential_answer): break
-        for j in range(i + 1, len(potential_answer)):
-            if potential_answer[i] in potential_answer[j]:
-                rm.append(potential_answer[j])
-                # print ("RM: ", potential_answer[j])
-    nrrw = [fruit for fruit in potential_answer if fruit not in rm]  # narrowed candidates
-
-    # for i in nrrw:
-    # print ("nrrw: >> ",i)
-
-    # *randomly return one answer
-    bef_length = len(potential_answer)
-    aft_length = len(nrrw)
-    rmd_index = randint(1, aft_length) - 1
-    answer = nrrw[rmd_index]
-    print("Before removing, we have: ", bef_length, "After we have: ", aft_length)
+         
+def prepare_answer(final_candidates):
+    '''
+      Input: 
+             sentence: two sentences tuple
+             atype: a string, target POS tag
+             parser: use Stanford coreNLP parser, defined in main
+             
+      Function: parse the sentence and find the answer from candidate answers
+      Output: string of answer. if fail to find, return None
+    '''
+    
+    # randomly return one answer
+    if not final_candidates : return None, 0
+    final_length = len(final_candidates)
+    rmd_index = randint(1, final_length) - 1
+    answer = final_candidates[rmd_index]
+    # print("Final candidates: ", final_length)
     # print ("Answer: ", answer)
     # exit()
-    return (answer,aft_length)
+    
+    return (answer, final_length)
 
 
 def retrieve_answer(paragraph, questions, parser):
@@ -249,28 +299,32 @@ def retrieve_answer(paragraph, questions, parser):
     aft_length_list=[]
     sent_list = []
     untrack = 0
-    for question in questions:
 
+    for question in questions:
+        
         # Step1: questions to unigrams and bigrams
         unused_question_list, question_token_set = (make_ngrams(question, ngrams=[1, 2]))
-
+        
         # Step2: window slide to find the match score between the passage sentence and the question
         score_sorted = make_score(para_token_set, question_token_set)
-        print('question:',question)
-        print('sentence:',sent_tokenize_list[score_sorted[0][0]])
-        if len(score_sorted) > 1:
-            candidate_sent = (sent_tokenize_list[score_sorted[0][0]], sent_tokenize_list[score_sorted[1][0]])
-        else:
-            candidate_sent = (sent_tokenize_list[score_sorted[0][0]], None)
+        #print('question:',question)
+        
+        
+        # if len(score_sorted) > 1:
+        #     candidate_sent = (sent_tokenize_list[score_sorted[0][0]], sent_tokenize_list[score_sorted[1][0]])
+        # else:
+        #     candidate_sent = (sent_tokenize_list[score_sorted[0][0]], None)
+
         # for parse:
 
         # candidate_sent = (sent_tokenize_list[score_sorted[0][0]],sent_tokenize_list[score_sorted[1][0]])
 
         # for test sentence retrival accuracy
-        if len(score_sorted) > 1:
-            sent_list.append((sent_tokenize_list[score_sorted[0][0]], sent_tokenize_list[score_sorted[1][0]]))
-        else:
-            sent_list.append((sent_tokenize_list[score_sorted[0][0]], ''))
+        # if len(score_sorted) > 1:
+        #     sent_list.append((sent_tokenize_list[score_sorted[0][0]], sent_tokenize_list[score_sorted[1][0]]))
+        # else:
+        #     sent_list.append((sent_tokenize_list[score_sorted[0][0]], ''))
+
 
         # Step3:
         atype = answer_type(question_token_set['1'])
@@ -278,33 +332,61 @@ def retrieve_answer(paragraph, questions, parser):
         if atype is None:
             untrack += 1
 
-        # if the top scored sentence does not contain the target answer type, go to the next sentence.
+        # if the top scored sentence did not find the answer, go to the next sentence.
+        s1 = sent_tokenize_list[score_sorted[0][0]]
+        s1_candidates = prepare_candidates(question, s1, atype, parser)
+        answer, aft_length = prepare_answer(s1_candidates)
+        
+        if answer == None and len(score_sorted) > 1: # if we have the 2nd sentence and s1 did not find answer
+            s2 = sent_tokenize_list[score_sorted[1][0]]
+            print('>>>> sentence2')
+            s2_candidates = prepare_candidates(question, s2, atype, parser)
+            answer, aft_length = prepare_answer(s2_candidates)
+            
 
-        (answer,aft_length) = parse(candidate_sent, atype, parser)
-        print('answer:', answer, '\n')
+        #print('answer:', answer, '\n')
         answer_list.append(answer)
         aft_length_list.append(aft_length)
 
-    return answer_list,aft_length_list
+    return answer_list, aft_length_list
+
+def write_line(question,answer,our_answer,aft_length,correct):
+    print('right answer:', answer)
+    print('our answer:', our_answer)
+    print('question:', question)
+    print('candidate number:', aft_length, '\n')
+
+    row = [question,answer,our_answer,aft_length,correct]
+    writer.writerow(row)
 
 
 # ------------------------------------------------------------------------------
 if __name__ == "__main__":
 
     # for parse:
-
+    
+### Alicia
     path_to_models_jar = '/Users/G_bgyl/si630/project/stanford-corenlp-full-2018-02-27/stanford-corenlp-3.9.1-models.jar'  # change to your path
-
     path_to_jar = '/Users/G_bgyl/si630/project/stanford-corenlp-full-2018-02-27/stanford-corenlp-3.9.1.jar'  # change to your path
+    
+### Mengying    
+    # path_to_models_jar = "/Users/Mengying/Desktop/SI630 NLP/FinalProject/stanford-corenlp-full-2018-02-27/stanford-corenlp-3.9.1-models.jar" # change to your path
+    # path_to_jar = "/Users/Mengying/Desktop/SI630 NLP/FinalProject/stanford-corenlp-full-2018-02-27/stanford-corenlp-3.9.1.jar" # change to your path
+
+    
+### CAEN    
+    #path_to_models_jar = 'stanford-corenlp-full-2018-02-27/stanford-corenlp-3.9.1-models.jar'  # change to your path
+    #path_to_jar = "stanford-corenlp-full-2018-02-27/stanford-corenlp-3.9.1.jar"
 
     parser = StanfordParser(path_to_jar=path_to_jar, path_to_models_jar=path_to_models_jar)
 
-    train_dict = read_data("dev-v1.1.json")
+    train_dict = read_data("/Users/G_bgyl/si630/project/dev-v1.1.json")
+
 
     # for test output:
     test_output = []
 
-    right = 0
+    right1,right2,right3 = 0,0,0
     wrong = 0
     with open('baseline_dev_result.csv', 'w') as baseline_dev_result: # , open('untrack_question.csv', 'w') as untrack_question
         writer = csv.writer(baseline_dev_result)
@@ -333,16 +415,26 @@ if __name__ == "__main__":
 
                     if answers[i]:
                         if answer_list[i]:
-                            if answers[i] in answer_list[i] or answer_list[i] in answers[i] or answer_list[i] == answers[i]:
-                                right += 1
+                            # exactly correct
+                            if answer_list[i] == answers[i]:
+                                right1 += 1
                                 print('Yay!')
-                                print('right answer:', answers[i])
-                                print('our answer:', answer_list[i])
-                                print('question:', questions[i])
-                                print('candidate number:', aft_length_list[i], '\n')
                                 find = True
-                                row = [questions[i],answers[i],answer_list[i],aft_length_list[i],1]
-                                writer.writerow(row)
+                                write_line(questions[i], answers[i], answer_list[i], aft_length_list[i], 1)
+                                continue
+                            # our answer contains correct answer
+                            elif answers[i] in answer_list[i]:
+                                right2 += 1
+                                print('Yay!')
+                                find = True
+                                write_line(questions[i], answers[i], answer_list[i], aft_length_list[i], 1)
+                                continue
+                            # correct answer contains our answer
+                            elif answers[i] in answer_list[i] or answer_list[i] in answers[i] or answer_list[i] == answers[i]:
+                                right3 += 1
+                                print('Yay!')
+                                find = True
+                                write_line(questions[i], answers[i], answer_list[i], aft_length_list[i], 1)
                                 continue
                         else:
                             print('answer_list[',i,'] went wrong')
@@ -353,34 +445,33 @@ if __name__ == "__main__":
 
                     if not find:
                         wrong += 1
-                        print('right answer:', answers[i])
-                        print('our answer:', answer_list[i])
-                        print('question:',questions[i])
-                        print('candidate number:',aft_length_list[i],'\n')
-                        row = [questions[i], answers[i], answer_list[i],aft_length_list[i], 0]
-                        writer.writerow(row)
-            print('count of right:',right)
-            print('count of wrong:',wrong)
-            print('sentence retrival accuracy for single article:', right / (right + wrong))
+                        write_line(questions[i], answers[i], answer_list[i], aft_length_list[i], 0)
 
-        print('count of right:',right)
-        print('count of wrong:',wrong)
-        print('sentence retrival accuracy for whole dev data:', right / (right + wrong))
+            print('count of exact right:', right1)
+            print('count of right with type 1 error:', right1 + right2)
+            print('count of right with type 2 error:', right1 + right3)
+            print('count of rough right:', right1 + right2 + right3)
+            print('count of wrong:', wrong)
+            print('sentence retrival accuracy for single article for exact right:',
+                  right1 / (right1 + right2 + right3 + wrong))
+            print('sentence retrival accuracy for single article for right with type 1 error:',
+                  right1 + right2 / (right1 + right2 + right3 + wrong))
+            print('sentence retrival accuracy for single article for right with type 2 error:',
+                  right1 + right3 / (right1 + right2 + right3 + wrong))
+            print('sentence retrival accuracy for single article for rough right:',
+                  right1 + right2 + right3 / (right1 + right2 + right3 + wrong))
 
+        print('count of exact right:', right1)
+        print('count of right with type 1 error:', right1 + right2)
+        print('count of right with type 2 error:', right1 + right3)
+        print('count of rough right:', right1 + right2 + right3)
+        print('count of wrong:', wrong)
+        print('sentence retrival accuracy for whole csv for exact right:',
+              right1 / (right1 + right2 + right3 + wrong))
+        print('sentence retrival accuracy for whole csv for right with type 1 error:',
+              right1 + right2 / (right1 + right2 + right3 + wrong))
+        print('sentence retrival accuracy for whole csv for right with type 2 error:',
+              right1 + right3 / (right1 + right2 + right3 + wrong))
+        print('sentence retrival accuracy for whole csv for rough right:',
+              right1 + right2 + right3 / (right1 + right2 + right3 + wrong))
 
-
-    # output file to get intuition of questions.
-        '''with open('baseline_dev_result.csv', 'w') as baseline_dev_result, open('untrack_question.csv', 'w') as untrack_question：
-        writer = csv.writer(baseline_dev_result)
-        writer2 = csv.writer(untrack_question)
-
-        untrack = 0
-        for question in test_output:
-            contain =False
-            writer.writerow(question)
-            for qMark  in QA_TYPE_MATCH:
-                if qMark in question:
-                    contain = True
-                    break
-            if not contain:
-                writer2.writerow(question)'''
