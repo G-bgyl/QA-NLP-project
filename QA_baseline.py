@@ -175,8 +175,18 @@ def ExtractPhrases(myTree, phrase, bot = True):
             list_of_phrases = ExtractPhrases(child, phrase, bot)
             if (len(list_of_phrases) > 0):
                 myPhrases.extend(list_of_phrases)
+
     return myPhrases
 
+
+
+def prepare_candidates(question, sentence, atype, parser):
+    question_token_list = nltk.word_tokenize(question)
+    stop_words = list(stopwords.words('english'))
+    stop_words.extend(['.', ','])
+
+    filtered_question = [w for w in question_token_list if not w in stop_words]
+    print ("Q_token: ", filtered_question)
 
 
 
@@ -298,6 +308,7 @@ def retrieve_answer(paragraph, questions, parser):
     sent_list = []
     untrack = 0
 
+
     for question in questions:
 
         # Step1: questions to unigrams and bigrams
@@ -360,6 +371,15 @@ if __name__ == "__main__":
 ### Alicia
     path_to_models_jar = '/Users/G_bgyl/si630/project/stanford-corenlp-full-2018-02-27/stanford-corenlp-3.9.1-models.jar'  # change to your path
     path_to_jar = '/Users/G_bgyl/si630/project/stanford-corenlp-full-2018-02-27/stanford-corenlp-3.9.1.jar'  # change to your path
+
+### Mengying
+    # path_to_models_jar = "/Users/Mengying/Desktop/SI630 NLP/FinalProject/stanford-corenlp-full-2018-02-27/stanford-corenlp-3.9.1-models.jar" # change to your path
+    # path_to_jar = "/Users/Mengying/Desktop/SI630 NLP/FinalProject/stanford-corenlp-full-2018-02-27/stanford-corenlp-3.9.1.jar" # change to your path
+
+
+### CAEN
+    #path_to_models_jar = 'stanford-corenlp-full-2018-02-27/stanford-corenlp-3.9.1-models.jar'  # change to your path
+    #path_to_jar = "stanford-corenlp-full-2018-02-27/stanford-corenlp-3.9.1.jar"
 
 ### Mengying
     # path_to_models_jar = "/Users/Mengying/Desktop/SI630 NLP/FinalProject/stanford-corenlp-full-2018-02-27/stanford-corenlp-3.9.1-models.jar" # change to your path
