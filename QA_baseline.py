@@ -210,24 +210,7 @@ def prepare_candidates(question, sentence, atype, parser):
 
 
 
-  ##### for bottom level
-    bottom_level = ExtractPhrases(tree, atype)
-    bottom_candidates = []
-    for phrase in bottom_level:
-        bottom_candidates.append(" ".join(phrase.leaves()))
-        # print ("PA:>> "," ".join(phrase.leaves()))
 
-    bottom_candidates.sort(key=len)
-    rm = ['it', "It", "there", "this", "This", "There"]  # long sentences to remove, we also remove 'it'
-
-    for i in range(len(bottom_candidates)):
-        if i == len(bottom_candidates): break
-        for j in range(i + 1, len(bottom_candidates)):
-            if bottom_candidates[i] in bottom_candidates[j]:
-                rm.append(bottom_candidates[j])
-
-    bottom_nrrw = [fruit for fruit in bottom_candidates if fruit not in rm]  # narrowed candidates
-    #print (">> Bottom: ", bottom_nrrw)
 
 
   ##### Find Answer
@@ -247,6 +230,25 @@ def prepare_candidates(question, sentence, atype, parser):
 
     ## find from bottom level if top level is too broad
     if len(final_candidates) == 0:
+        
+        ##### for bottom level
+        bottom_level = ExtractPhrases(tree, atype)
+        bottom_candidates = []
+        for phrase in bottom_level:
+            bottom_candidates.append(" ".join(phrase.leaves()))
+            # print ("PA:>> "," ".join(phrase.leaves()))
+
+        bottom_candidates.sort(key=len)
+        rm = ['it', "It", "there", "this", "This", "There"]  # long sentences to remove, we also remove 'it'
+
+        for i in range(len(bottom_candidates)):
+            if i == len(bottom_candidates): break
+            for j in range(i + 1, len(bottom_candidates)):
+                if bottom_candidates[i] in bottom_candidates[j]:
+                    rm.append(bottom_candidates[j])
+
+        bottom_nrrw = [fruit for fruit in bottom_candidates if fruit not in rm]  # narrowed candidates
+        # print (">> Bottom: ", bottom_nrrw)
 
         # remove overlapping ones
         final_candidates = copy.copy(bottom_nrrw)
